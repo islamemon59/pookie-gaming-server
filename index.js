@@ -1,12 +1,39 @@
+const { MongoClient, ServerApiVersion } = require("mongodb");
 // Import express
 const express = require("express");
 const app = express();
-const cors = require("cors")
-const port = process.env.PORT || 5000
+const cors = require("cors");
+const dotenv = require("dotenv");
+dotenv.config();
+const port = process.env.PORT || 5000;
 
 // Middleware to parse JSON requests
 app.use(express.json());
-app.use(cors())
+app.use(cors());
+
+
+
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(process.env.MONGODB_URI, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
+async function run() {
+  try {
+
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
+  } finally {
+
+  }
+}
+run().catch(console.dir);
 
 // Basic route
 app.get("/", (req, res) => {
@@ -19,8 +46,6 @@ app.post("/data", (req, res) => {
   res.json({ message: "Data received successfully", data });
 });
 
-// Server listen on port 5000
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`🚀 Server is running on http://localhost:${port}`);
 });
