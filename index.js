@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // Import express
 const express = require("express");
 const app = express();
@@ -28,9 +28,20 @@ async function run() {
     app.get("/games", async (req, res) => {
       try {
         const games = await gameDataCollection.find().toArray();
-        res.json(games);
+        res.send(games);
       } catch (error) {
         res.status(500).json({ message: "Error fetching games", error });
+      }
+    });
+
+    app.get("/games/:id", async (req, res) => {
+      try {
+        id = req?.params?.id;
+        const query = { _id: new ObjectId(id) };
+        const game = await gameDataCollection.findOne(query);
+        res.send(game);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching game", error });
       }
     });
 
@@ -44,7 +55,7 @@ async function run() {
 run().catch(console.dir);
 
 // Basic route
-app.get("/game", (req, res) => {
+app.get("/", (req, res) => {
   res.send("Hello, Express Server is running!");
 });
 
