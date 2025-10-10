@@ -45,6 +45,28 @@ async function run() {
       }
     });
 
+    app.delete("/games/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const filter = { _id: new ObjectId(id) };
+
+        const deleteGame = await gameDataCollection.deleteOne(filter);
+
+        if (!deleteGame) {
+          return res
+            .send(404)
+            .json({ success: false, message: "Game not found" });
+        }
+
+        res
+          .send(200)
+          .json({ success: true, message: "Game deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting game:", error);
+        res.send(500).json({ success: false, message: "Server error" });
+      }
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
