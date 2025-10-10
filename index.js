@@ -45,6 +45,20 @@ async function run() {
       }
     });
 
+    app.put("/games/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updateDoc = req.body;
+        const result = await gameDataCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateDoc }
+        );
+        res.send({ success: true, result });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
     app.delete("/games/:id", async (req, res) => {
       try {
         const { id } = req.params;
