@@ -76,6 +76,33 @@ async function run() {
       }
     });
 
+    // ✅ Save or skip duplicate user
+    app.post("/users", async (req, res) => {
+      try {
+        const { name, email } = req.body;
+
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+
+        const existingUser = await userDataCollection.findOne({ email });
+
+        if (existingUser) {
+          return res.send({
+            message: "User already exists",
+            user: existingUser,
+          });
+        }
+
+        const newUser = { name, email, createdAt: new Date() };
+        const result = await userDataCollection.insertOne(newUser);
+        res.send({ message: "User added successfully", result });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
     app.put("/games/:id", async (req, res) => {
       try {
         const id = req.params.id;
