@@ -45,10 +45,23 @@ async function run() {
       }
     });
 
+    app.post("/games", async (req, res) => {
+  try {
+    const game = req.body;
+
+    const result = await gameDataCollection.insertOne(game);
+    res.status(201).send({ success: true, result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ success: false, message: err.message });
+  }
+});
+
     app.put("/games/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const updateDoc = req.body;
+        console.log(id, updateDoc);
         const result = await gameDataCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: updateDoc }
