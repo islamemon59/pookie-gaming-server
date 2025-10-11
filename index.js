@@ -24,6 +24,25 @@ async function run() {
   try {
     const db = client.db("gameCollection");
     const gameDataCollection = db.collection("gameData");
+    const userDataCollection = db.collection("userData");
+
+    app.get("/total-games", async (req, res) => {
+      try {
+        const count = await gameDataCollection.countDocuments();
+        console.log(count);
+        res.json({ totalGames: count });
+      } catch (error) {
+        res.send(500).json({ message: error.message });
+      }
+    });
+    app.get("/total-users", async (req, res) => {
+      try {
+        const count = await userDataCollection.countDocuments();
+        res.json({ totalUsers: count });
+      } catch (error) {
+        res.send(500).json({ message: error.message });
+      }
+    });
 
     app.get("/games", async (req, res) => {
       try {
@@ -46,16 +65,16 @@ async function run() {
     });
 
     app.post("/games", async (req, res) => {
-  try {
-    const game = req.body;
+      try {
+        const game = req.body;
 
-    const result = await gameDataCollection.insertOne(game);
-    res.status(201).send({ success: true, result });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ success: false, message: err.message });
-  }
-});
+        const result = await gameDataCollection.insertOne(game);
+        res.status(201).send({ success: true, result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
 
     app.put("/games/:id", async (req, res) => {
       try {
