@@ -77,9 +77,9 @@ async function run() {
         }
         const games = await gameDataCollection.find({
           title: { $regex: title, $options: "i" },
-        });
+        }).toArray();
 
-        res.status(200).json(games);
+        res.status(200).send(games);
       } catch (error) {
         console.error("Error searching games:", error);
         res.status(500).json({ message: "Server Error" });
