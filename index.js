@@ -46,7 +46,10 @@ async function run() {
 
     app.get("/games", async (req, res) => {
       try {
-        const games = await gameDataCollection.find().sort({ _id: -1 }).toArray();
+        const games = await gameDataCollection
+          .find()
+          .sort({ _id: -1 })
+          .toArray();
         res.send(games);
       } catch (error) {
         res.status(500).json({ message: "Error fetching games", error });
@@ -61,6 +64,25 @@ async function run() {
         res.send(game);
       } catch (error) {
         res.status(500).json({ message: "Error fetching game", error });
+      }
+    });
+
+    app.get("/search", async (req, res) => {
+      try {
+        const { title } = req.query;
+        if (!title || title.trim() === "") {
+          return res
+            .status(400)
+            .json({ message: "Please enter a search term" });
+        }
+        const games = await gameDataCollection.find({
+          title: { $regex: title, $options: "i" },
+        });
+
+        res.status(200).json(games);
+      } catch (error) {
+        console.error("Error searching games:", error);
+        res.status(500).json({ message: "Server Error" });
       }
     });
 
