@@ -46,7 +46,7 @@ async function run() {
 
     app.get("/games", async (req, res) => {
       try {
-        const games = await gameDataCollection.find().toArray();
+        const games = await gameDataCollection.find().sort({ _id: -1 }).toArray();
         res.send(games);
       } catch (error) {
         res.status(500).json({ message: "Error fetching games", error });
