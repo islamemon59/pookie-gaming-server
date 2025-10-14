@@ -15,7 +15,7 @@ app.use(cors());
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
     version: ServerApiVersion.v1,
-    strict: true,
+    strict: false,
     deprecationErrors: true,
   },
 });
@@ -56,6 +56,42 @@ async function run() {
       }
     });
 
+    app.get("/search/games", async (req, res) => {
+      try {
+        const { title } = req.query;
+
+        // If search term exists, filter by title
+        const query =
+          title && title.trim() !== ""
+            ? { title: { $regex: title, $options: "i" } }
+            : {};
+
+        const games = await gameDataCollection
+          .find(query)
+          .sort({ _id: -1 }) // latest games first
+          .toArray();
+
+        res.status(200).send(games);
+      } catch (error) {
+        console.error("Error fetching games:", error);
+        res.status(500).json({ message: "Server Error" });
+      }
+    });
+
+app.get("/categories", async (req, res) => {
+  try {
+    const categories = await gameDataCollection.distinct("category");
+    res.json({ success: true, categories });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch categories",
+      error: error.message,
+    });
+  }
+});
+
     app.get("/games/:id", async (req, res) => {
       try {
         id = req?.params?.id;
@@ -75,9 +111,11 @@ async function run() {
             .status(400)
             .json({ message: "Please enter a search term" });
         }
-        const games = await gameDataCollection.find({
-          title: { $regex: title, $options: "i" },
-        }).toArray();
+        const games = await gameDataCollection
+          .find({
+            title: { $regex: title, $options: "i" },
+          })
+          .toArray();
 
         res.status(200).send(games);
       } catch (error) {
