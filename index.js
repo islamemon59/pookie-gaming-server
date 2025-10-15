@@ -174,6 +174,19 @@ async function run() {
       }
     });
 
+    // Delete ad
+    app.delete("/ads/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await adsDataCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send({ success: true, result });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
     // ✅ Save or skip duplicate user
     app.post("/users", async (req, res) => {
       try {
