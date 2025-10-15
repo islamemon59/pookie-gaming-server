@@ -25,6 +25,7 @@ async function run() {
     const db = client.db("gameCollection");
     const gameDataCollection = db.collection("gameData");
     const userDataCollection = db.collection("userData");
+    const adsDataCollection = db.collection("adsData");
 
     app.get("/total-games", async (req, res) => {
       try {
@@ -78,19 +79,19 @@ async function run() {
       }
     });
 
-app.get("/categories", async (req, res) => {
-  try {
-    const categories = await gameDataCollection.distinct("category");
-    res.json({ success: true, categories });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch categories",
-      error: error.message,
+    app.get("/categories", async (req, res) => {
+      try {
+        const categories = await gameDataCollection.distinct("category");
+        res.json({ success: true, categories });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch categories",
+          error: error.message,
+        });
+      }
     });
-  }
-});
 
     app.get("/games/:id", async (req, res) => {
       try {
@@ -130,6 +131,43 @@ app.get("/categories", async (req, res) => {
 
         const result = await gameDataCollection.insertOne(game);
         res.status(201).send({ success: true, result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // GET /ads
+    app.get("/ads", async (req, res) => {
+      try {
+        const ads = await adsDataCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send({ success: true, ads });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    app.post("/ads", async (req, res) => {
+      try {
+        const { title, image, link, position } = req.body;
+
+        if (!title || !image || !link || !position) {
+          return res
+            .status(400)
+            .send({ success: false, message: "All fields are required" });
+        }
+        const result = await adsDataCollection.insertOne({
+          title,
+          image,
+          link,
+          position, // left, right, bottom
+          createdAt: new Date(),
+        });
+
+        res.status(201).send({ success: true, ad: result.insertedId });
       } catch (err) {
         console.error(err);
         res.status(500).send({ success: false, message: err.message });
