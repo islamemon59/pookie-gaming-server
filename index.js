@@ -150,6 +150,23 @@ async function run() {
       }
     });
 
+    app.get("/ads/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const ad = await adsDataCollection.findOne({ _id: new ObjectId(id) });
+
+        if (!ad) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Ad not found" });
+        }
+
+        res.send({ success: true, ad });
+      } catch (err) {
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
     app.post("/ads", async (req, res) => {
       try {
         const { title, image, link, position } = req.body;
@@ -170,6 +187,21 @@ async function run() {
         res.status(201).send({ success: true, ad: result.insertedId });
       } catch (err) {
         console.error(err);
+        res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    // Update ad
+    app.put("/ads/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updateData = req.body;
+        const result = await adsDataCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
+        res.send({ success: true, result });
+      } catch (err) {
         res.status(500).send({ success: false, message: err.message });
       }
     });
