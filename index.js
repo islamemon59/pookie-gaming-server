@@ -11,7 +11,7 @@ const port = process.env.PORT || 5000;
 app.use(express.json());
 app.use(cors());
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// Create a MongoClient with a MongoClientOptions object to set the Stable API
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
     version: ServerApiVersion.v1,
