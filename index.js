@@ -128,6 +128,7 @@ async function run() {
     app.post("/games", async (req, res) => {
       try {
         const game = req.body;
+        game.createdAt = new Date();
 
         const result = await gameDataCollection.insertOne(game);
         res.status(201).send({ success: true, result });
@@ -164,6 +165,30 @@ async function run() {
         res.send({ success: true, ad });
       } catch (err) {
         res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    app.get("/games/category/:category", async (req, res) => {
+      try {
+        const { category } = req.params;
+
+        if (!category) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Category is required" });
+        }
+
+        const games = await gameDataCollection.find({
+          category: { $regex: `^${category}$`, $options: "i" },
+        });
+        res.status(200).json({ success: true, count: games.length, games });
+      } catch (error) {
+        console.error("Error fetching category games:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch category games",
+          error: error.message,
+        });
       }
     });
 
