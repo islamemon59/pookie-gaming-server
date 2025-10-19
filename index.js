@@ -138,7 +138,7 @@ async function run() {
       }
     });
 
-    // GET /ads
+
     app.get("/ads", async (req, res) => {
       try {
         const ads = await adsDataCollection
@@ -180,7 +180,7 @@ async function run() {
 
         const games = await gameDataCollection.find({
           category: { $regex: `^${category}$`, $options: "i" },
-        });
+        }).toArray();
         res.status(200).json({ success: true, count: games.length, games });
       } catch (error) {
         console.error("Error fetching category games:", error);
