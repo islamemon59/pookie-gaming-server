@@ -231,7 +231,6 @@ async function run() {
       }
     });
 
-    // Delete ad
     app.delete("/ads/:id", async (req, res) => {
       try {
         const id = req.params.id;
