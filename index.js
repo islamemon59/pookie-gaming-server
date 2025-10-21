@@ -30,7 +30,6 @@ async function run() {
     app.get("/total-games", async (req, res) => {
       try {
         const count = await gameDataCollection.countDocuments();
-        console.log(count);
         res.json({ totalGames: count });
       } catch (error) {
         res.send(500).json({ message: error.message });
@@ -138,7 +137,6 @@ async function run() {
       }
     });
 
-
     app.get("/ads", async (req, res) => {
       try {
         const ads = await adsDataCollection
@@ -178,9 +176,11 @@ async function run() {
             .json({ success: false, message: "Category is required" });
         }
 
-        const games = await gameDataCollection.find({
-          category: { $regex: `^${category}$`, $options: "i" },
-        }).toArray();
+        const games = await gameDataCollection
+          .find({
+            category: { $regex: `^${category}$`, $options: "i" },
+          })
+          .toArray();
         res.status(200).json({ success: true, count: games.length, games });
       } catch (error) {
         console.error("Error fetching category games:", error);
@@ -274,7 +274,6 @@ async function run() {
       try {
         const id = req.params.id;
         const updateDoc = req.body;
-        console.log(id, updateDoc);
         const result = await gameDataCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: updateDoc }
@@ -306,11 +305,6 @@ async function run() {
         res.send(500).json({ success: false, message: "Server error" });
       }
     });
-
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
   } finally {
   }
 }
@@ -321,10 +315,62 @@ app.get("/", (req, res) => {
   res.send("Hello, Express Server is running!");
 });
 
-// Example POST route
-app.post("/data", (req, res) => {
-  const data = req.body;
-  res.json({ message: "Data received successfully", data });
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const db = client.db("gameCollection"); // your DB name
+    const gameDataCollection = db.collection("gameData");
+
+    const games = await gameDataCollection
+      .find({}, { projection: { _id: 1, title: 1, category: 1, createdAt: 1 } })
+      .toArray();
+
+    const categories = await gameDataCollection.distinct("category");
+    const baseUrl = "https://innliv.com";
+
+    // Static pages
+    const staticUrls = `
+      <url><loc>${baseUrl}/</loc></url>
+      <url><loc>${baseUrl}/about</loc></url>
+      <url><loc>${baseUrl}/contact</loc></url>
+      <url><loc>${baseUrl}/privacy</loc></url>
+    `;
+
+    // Dynamic category URLs
+    let categoryUrls = "";
+    categories.forEach((category) => {
+      categoryUrls += `
+        <url>
+          <loc>${baseUrl}/category/${encodeURIComponent(category)}</loc>
+        </url>`;
+    });
+
+    // Dynamic game URLs
+    let gameUrls = "";
+    games.forEach((game) => {
+      const lastmod = game.createdAt
+        ? new Date(game.createdAt).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0];
+      gameUrls += `
+        <url>
+          <loc>${baseUrl}/games/${game._id}</loc>
+          <lastmod>${lastmod}</lastmod>
+        </url>`;
+    });
+
+    // Combine everything
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        ${staticUrls}
+        ${categoryUrls}
+        ${gameUrls}
+      </urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (error) {
+    console.error("Error generating sitemap:", error);
+    res.status(500).send("Error generating sitemap");
+  }
 });
 
 app.listen(port, () => {
