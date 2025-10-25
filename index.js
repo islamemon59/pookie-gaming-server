@@ -1,6 +1,7 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // Import express
 const express = require("express");
+const sendEmail = require("./utils/sendEmail");
 const app = express();
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -26,6 +27,7 @@ async function run() {
     const gameDataCollection = db.collection("gameData");
     const userDataCollection = db.collection("userData");
     const adsDataCollection = db.collection("adsData");
+    const subscriberCollection = db.collection("subscriber");
 
     app.get("/total-games", async (req, res) => {
       try {
@@ -131,10 +133,50 @@ async function run() {
         game.createdAt = new Date();
 
         const result = await gameDataCollection.insertOne(game);
+
+        // ✅ Fetch all subscribers
+        const subscribers = await subscriberCollection.find({}).toArray();
+
+        // ✅ Send email to all subscribers
+        for (const sub of subscribers) {
+          await sendEmail(
+            sub.email,
+            `🎮 New Game Added: ${game.title}`,
+            `
+          <h2 style="color:#333;">${game.title}</h2>
+          <p>Category: <strong>${game.category}</strong></p>
+          <img src="${game.thumbnail}" style="width:200px;border-radius:8px;" />
+          <p><a href="https://yourdomain.com/games/${result.insertedId}" style="color:#3489BD;">Play Now</a></p>
+        `
+          );
+        }
+
         res.status(201).send({ success: true, result });
       } catch (err) {
-        console.error(err);
+        console.error("Error adding game:", err);
         res.status(500).send({ success: false, message: err.message });
+      }
+    });
+
+    app.post("/subscribe", async (req, res) => {
+      try {
+        const { email } = req.body;
+        console.log(email);
+        if (!email)
+          return res.status(400).send({ message: "Email is required" });
+
+        const existing = await subscriberCollection.findOne({ email });
+        if (existing)
+          return res.status(400).send({ message: "Already subscribed" });
+
+        const newSub = { email, subscribedAt: new Date() };
+        const result = await subscriberCollection.insertOne(newSub);
+        res
+          .status(201)
+          .send({ message: "Subscribed successfully", subscriber: newSub });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Server error" });
       }
     });
 
