@@ -1,11 +1,11 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // Import express
 const express = require("express");
-const sendEmail = require("./utils/sendEmail");
 const app = express();
 const cors = require("cors");
 const dotenv = require("dotenv");
 dotenv.config();
+const sendEmail = require("./utils/sendEmail");
 const port = process.env.PORT || 5000;
 
 // Middleware to parse JSON requests
