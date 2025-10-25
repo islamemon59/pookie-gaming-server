@@ -49,6 +49,7 @@ async function run() {
         const games = await gameDataCollection
           .find()
           .sort({ _id: -1 })
+          .limit(50)
           .toArray();
         res.send(games);
       } catch (error) {
