@@ -4,13 +4,18 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const dotenv = require("dotenv");
+const multer = require("multer");
+const fs = require("fs");
 dotenv.config();
+
+const cloudinary = require("./utils/cloudinary.js");
 const sendEmail = require("./utils/sendEmail");
 const port = process.env.PORT || 5000;
 
 // Middleware to parse JSON requests
 app.use(express.json());
 app.use(cors());
+const upload = multer({ dest: "uploads/" });
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API
 const client = new MongoClient(process.env.MONGODB_URI, {
@@ -348,6 +353,37 @@ async function run() {
         res.send(500).json({ success: false, message: "Server error" });
       }
     });
+
+// === Upload API ===
+app.post("/upload", upload.array("images"), async (req, res) => {
+  try {
+    const urls = [];
+
+    for (const file of req.files) {
+      const result = await cloudinary.uploader.upload(file.path, {
+        folder: "pooki-uploads",
+      });
+
+      urls.push(result.secure_url);
+      fs.unlinkSync(file.path); // delete local temp file
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Images uploaded successfully!",
+      urls,
+    });
+  } catch (error) {
+    console.error("Upload Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload images",
+      error: error.message,
+    });
+  }
+});
+
+
   } finally {
   }
 }
