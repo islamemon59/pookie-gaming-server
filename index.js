@@ -2,20 +2,28 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // Import express
 const express = require("express");
 const app = express();
+const helmet = require("helmet");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const multer = require("multer");
 const fs = require("fs");
 dotenv.config();
-
+const prerender = require("prerender-node");
 const cloudinary = require("./utils/cloudinary.js");
 const sendEmail = require("./utils/sendEmail");
 const port = process.env.PORT || 5000;
 
 // Middleware to parse JSON requests
-app.use(express.json());
-app.use(cors());
 const upload = multer({ dest: "uploads/" });
+app.use(express.json());
+app.use(helmet());
+app.use(cors({
+  origin: "https://innliv.com"
+}));
+app.use(
+  prerender.set("prerenderToken", process.env.PRERENDER_TOKEN)
+);
+
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API
 const client = new MongoClient(process.env.MONGODB_URI, {
