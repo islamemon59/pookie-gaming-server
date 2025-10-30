@@ -18,10 +18,7 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json());
 app.use(helmet());
 app.use(cors());
-app.use(
-  prerender.set("prerenderToken", process.env.PRERENDER_TOKEN)
-);
-
+app.use(prerender.set("prerenderToken", process.env.PRERENDER_TOKEN));
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API
 const client = new MongoClient(process.env.MONGODB_URI, {
@@ -34,6 +31,9 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
+    await client.connect();
+    console.log("✅ MongoDB Connected Successfully");
+
     const db = client.db("gameCollection");
     const gameDataCollection = db.collection("gameData");
     const userDataCollection = db.collection("userData");
@@ -360,36 +360,34 @@ async function run() {
       }
     });
 
-// === Upload API ===
-app.post("/upload", upload.array("images"), async (req, res) => {
-  try {
-    const urls = [];
+    // === Upload API ===
+    app.post("/upload", upload.array("images"), async (req, res) => {
+      try {
+        const urls = [];
 
-    for (const file of req.files) {
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: "pooki-uploads",
-      });
+        for (const file of req.files) {
+          const result = await cloudinary.uploader.upload(file.path, {
+            folder: "pooki-uploads",
+          });
 
-      urls.push(result.secure_url);
-      fs.unlinkSync(file.path); // delete local temp file
-    }
+          urls.push(result.secure_url);
+          fs.unlinkSync(file.path); // delete local temp file
+        }
 
-    res.status(200).json({
-      success: true,
-      message: "Images uploaded successfully!",
-      urls,
+        res.status(200).json({
+          success: true,
+          message: "Images uploaded successfully!",
+          urls,
+        });
+      } catch (error) {
+        console.error("Upload Error:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to upload images",
+          error: error.message,
+        });
+      }
     });
-  } catch (error) {
-    console.error("Upload Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to upload images",
-      error: error.message,
-    });
-  }
-});
-
-
   } finally {
   }
 }
