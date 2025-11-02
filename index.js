@@ -248,20 +248,55 @@ async function run() {
 
     app.post("/ads", async (req, res) => {
       try {
-        const { title, image, link, position } = req.body;
+        const { title, type, image, link, position, content } = req.body;
 
-        if (!title || !image || !link || !position) {
+        console.log(title, type, image, link, position, content );
+
+        // Validate required fields
+        if (!title || !type || !position) {
           return res
             .status(400)
-            .send({ success: false, message: "All fields are required" });
+            .send({
+              success: false,
+              message: "Title, type, and position are required",
+            });
         }
-        const result = await adsDataCollection.insertOne({
+
+        // Type-specific validation
+        if (type === "image" && (!image || !link)) {
+          return res
+            .status(400)
+            .send({
+              success: false,
+              message: "Image and link are required for image ads",
+            });
+        }
+
+        if (type === "code" && !content) {
+          return res
+            .status(400)
+            .send({
+              success: false,
+              message: "Ad code content is required for code ads",
+            });
+        }
+
+        // Build ad object dynamically
+        const newAd = {
           title,
-          image,
-          link,
+          type,
           position, // left, right, bottom
           createdAt: new Date(),
-        });
+        };
+
+        if (type === "image") {
+          newAd.image = image;
+          newAd.link = link;
+        } else if (type === "code") {
+          newAd.content = content;
+        }
+
+        const result = await adsDataCollection.insertOne(newAd);
 
         res.status(201).send({ success: true, ad: result.insertedId });
       } catch (err) {
