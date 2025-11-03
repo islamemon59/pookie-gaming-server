@@ -250,35 +250,29 @@ async function run() {
       try {
         const { title, type, image, link, position, content } = req.body;
 
-        console.log(title, type, image, link, position, content );
+        console.log(title, type, image, link, position, content);
 
         // Validate required fields
         if (!title || !type || !position) {
-          return res
-            .status(400)
-            .send({
-              success: false,
-              message: "Title, type, and position are required",
-            });
+          return res.status(400).send({
+            success: false,
+            message: "Title, type, and position are required",
+          });
         }
 
         // Type-specific validation
         if (type === "image" && (!image || !link)) {
-          return res
-            .status(400)
-            .send({
-              success: false,
-              message: "Image and link are required for image ads",
-            });
+          return res.status(400).send({
+            success: false,
+            message: "Image and link are required for image ads",
+          });
         }
 
         if (type === "code" && !content) {
-          return res
-            .status(400)
-            .send({
-              success: false,
-              message: "Ad code content is required for code ads",
-            });
+          return res.status(400).send({
+            success: false,
+            message: "Ad code content is required for code ads",
+          });
         }
 
         // Build ad object dynamically
