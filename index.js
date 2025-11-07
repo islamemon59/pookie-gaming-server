@@ -1,5 +1,5 @@
+// server.js
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-// Import express
 const express = require("express");
 const app = express();
 const helmet = require("helmet");
@@ -11,16 +11,24 @@ dotenv.config();
 const prerender = require("prerender-node");
 const cloudinary = require("./utils/cloudinary.js");
 const sendEmail = require("./utils/sendEmail");
-const port = process.env.PORT || 5000;
 
-// Middleware to parse JSON requests
+const PORT = process.env.PORT || 3070;
+
+// Middleware
 const upload = multer({ dest: "uploads/" });
 app.use(express.json());
 app.use(helmet());
 app.use(cors());
-app.use(prerender.set("prerenderToken", process.env.PRERENDER_TOKEN));
+if (process.env.PRERENDER_TOKEN) {
+  app.use(prerender.set("prerenderToken", process.env.PRERENDER_TOKEN));
+}
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API
+// Mongo client
+if (!process.env.MONGODB_URI) {
+  console.error("MONGODB_URI not set in env");
+  process.exit(1);
+}
+
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -40,23 +48,29 @@ async function run() {
     const adsDataCollection = db.collection("adsData");
     const subscriberCollection = db.collection("subscriber");
 
+    // total games
     app.get("/total-games", async (req, res) => {
       try {
         const count = await gameDataCollection.countDocuments();
         res.json({ totalGames: count });
       } catch (error) {
-        res.send(500).json({ message: error.message });
+        console.error("Error /total-games:", error);
+        res.status(500).json({ message: error.message });
       }
     });
+
+    // total users
     app.get("/total-users", async (req, res) => {
       try {
         const count = await userDataCollection.countDocuments();
         res.json({ totalUsers: count });
       } catch (error) {
-        res.send(500).json({ message: error.message });
+        console.error("Error /total-users:", error);
+        res.status(500).json({ message: error.message });
       }
     });
 
+    // get latest games (limit 50)
     app.get("/games", async (req, res) => {
       try {
         const games = await gameDataCollection
@@ -66,15 +80,16 @@ async function run() {
           .toArray();
         res.send(games);
       } catch (error) {
+        console.error("Error fetching games:", error);
         res.status(500).json({ message: "Error fetching games", error });
       }
     });
 
+    // search games (by title, optional)
     app.get("/search/games", async (req, res) => {
       try {
         const { title } = req.query;
 
-        // If search term exists, filter by title
         const query =
           title && title.trim() !== ""
             ? { title: { $regex: title, $options: "i" } }
@@ -82,9 +97,8 @@ async function run() {
 
         const games = await gameDataCollection
           .find(query)
-          .sort({ _id: -1 }) // latest games first
+          .sort({ _id: -1 })
           .toArray();
-
         res.status(200).send(games);
       } catch (error) {
         console.error("Error fetching games:", error);
@@ -92,12 +106,13 @@ async function run() {
       }
     });
 
+    // categories
     app.get("/categories", async (req, res) => {
       try {
         const categories = await gameDataCollection.distinct("category");
         res.json({ success: true, categories });
       } catch (error) {
-        console.error(error);
+        console.error("Error /categories:", error);
         res.status(500).json({
           success: false,
           message: "Failed to fetch categories",
@@ -106,17 +121,24 @@ async function run() {
       }
     });
 
+    // get game by id
     app.get("/games/:id", async (req, res) => {
       try {
-        id = req?.params?.id;
+        const id = req?.params?.id;
+        if (!id || !ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "Invalid game id" });
+        }
         const query = { _id: new ObjectId(id) };
         const game = await gameDataCollection.findOne(query);
+        if (!game) return res.status(404).json({ message: "Game not found" });
         res.send(game);
       } catch (error) {
+        console.error("Error fetching game:", error);
         res.status(500).json({ message: "Error fetching game", error });
       }
     });
 
+    // generic search (requires title)
     app.get("/search", async (req, res) => {
       try {
         const { title } = req.query;
@@ -126,9 +148,7 @@ async function run() {
             .json({ message: "Please enter a search term" });
         }
         const games = await gameDataCollection
-          .find({
-            title: { $regex: title, $options: "i" },
-          })
+          .find({ title: { $regex: title, $options: "i" } })
           .toArray();
 
         res.status(200).send(games);
@@ -138,28 +158,49 @@ async function run() {
       }
     });
 
+    // add game + notify subscribers
     app.post("/games", async (req, res) => {
       try {
         const game = req.body;
+        if (!game || !game.title) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Game title is required" });
+        }
         game.createdAt = new Date();
 
         const result = await gameDataCollection.insertOne(game);
 
-        // ✅ Fetch all subscribers
+        // Fetch subscribers
         const subscribers = await subscriberCollection.find({}).toArray();
 
-        // ✅ Send email to all subscribers
+        // Send email to all subscribers (sequential — consider batching)
         for (const sub of subscribers) {
-          await sendEmail(
-            sub.email,
-            `🎮 New Game Added: ${game.title}`,
+          try {
+            await sendEmail(
+              sub.email,
+              `🎮 New Game Added: ${game.title}`,
+              `
+              <h2 style="color:#333;">${game.title}</h2>
+              <p>Category: <strong>${
+                game.category || "Unspecified"
+              }</strong></p>
+              ${
+                game.thumbnail
+                  ? `<img src="${game.thumbnail}" style="width:200px;border-radius:8px;" />`
+                  : ""
+              }
+              <p><a href="${
+                process.env.SITE_BASE_URL || "https://innliv.com/"
+              }/games/${
+                result.insertedId
+              }" style="color:#3489BD;">Play Now</a></p>
             `
-          <h2 style="color:#333;">${game.title}</h2>
-          <p>Category: <strong>${game.category}</strong></p>
-          <img src="${game.thumbnail}" style="width:200px;border-radius:8px;" />
-          <p><a href="https://yourdomain.com/games/${result.insertedId}" style="color:#3489BD;">Play Now</a></p>
-        `
-          );
+            );
+          } catch (mailErr) {
+            console.error("Error sending mail to", sub.email, mailErr);
+            // don't fail the whole request if one mail fails
+          }
         }
 
         res.status(201).send({ success: true, result });
@@ -169,10 +210,10 @@ async function run() {
       }
     });
 
+    // subscribe
     app.post("/subscribe", async (req, res) => {
       try {
         const { email } = req.body;
-        console.log(email);
         if (!email)
           return res.status(400).send({ message: "Email is required" });
 
@@ -181,16 +222,17 @@ async function run() {
           return res.status(400).send({ message: "Already subscribed" });
 
         const newSub = { email, subscribedAt: new Date() };
-        const result = await subscriberCollection.insertOne(newSub);
+        await subscriberCollection.insertOne(newSub);
         res
           .status(201)
           .send({ message: "Subscribed successfully", subscriber: newSub });
       } catch (err) {
-        console.error(err);
+        console.error("Error /subscribe:", err);
         res.status(500).send({ message: "Server error" });
       }
     });
 
+    // get ads
     app.get("/ads", async (req, res) => {
       try {
         const ads = await adsDataCollection
@@ -199,13 +241,20 @@ async function run() {
           .toArray();
         res.send({ success: true, ads });
       } catch (err) {
+        console.error("Error /ads:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
+    // get ad by id
     app.get("/ads/:id", async (req, res) => {
       try {
         const id = req.params.id;
+        if (!id || !ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid ad id" });
+        }
         const ad = await adsDataCollection.findOne({ _id: new ObjectId(id) });
 
         if (!ad) {
@@ -216,10 +265,12 @@ async function run() {
 
         res.send({ success: true, ad });
       } catch (err) {
+        console.error("Error /ads/:id:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
+    // games by category
     app.get("/games/category/:category", async (req, res) => {
       try {
         const { category } = req.params;
@@ -231,9 +282,7 @@ async function run() {
         }
 
         const games = await gameDataCollection
-          .find({
-            category: { $regex: `^${category}$`, $options: "i" },
-          })
+          .find({ category: { $regex: `^${category}$`, $options: "i" } })
           .toArray();
         res.status(200).json({ success: true, count: games.length, games });
       } catch (error) {
@@ -246,13 +295,11 @@ async function run() {
       }
     });
 
+    // create ad
     app.post("/ads", async (req, res) => {
       try {
         const { title, type, image, link, position, content } = req.body;
 
-        console.log(title, type, image, link, position, content);
-
-        // Validate required fields
         if (!title || !type || !position) {
           return res.status(400).send({
             success: false,
@@ -260,7 +307,6 @@ async function run() {
           });
         }
 
-        // Type-specific validation
         if (type === "image" && (!image || !link)) {
           return res.status(400).send({
             success: false,
@@ -275,14 +321,7 @@ async function run() {
           });
         }
 
-        // Build ad object dynamically
-        const newAd = {
-          title,
-          type,
-          position, // left, right, bottom
-          createdAt: new Date(),
-        };
-
+        const newAd = { title, type, position, createdAt: new Date() };
         if (type === "image") {
           newAd.image = image;
           newAd.link = link;
@@ -291,18 +330,22 @@ async function run() {
         }
 
         const result = await adsDataCollection.insertOne(newAd);
-
         res.status(201).send({ success: true, ad: result.insertedId });
       } catch (err) {
-        console.error(err);
+        console.error("Error creating ad:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
-    // Update ad
+    // update ad
     app.put("/ads/:id", async (req, res) => {
       try {
         const id = req.params.id;
+        if (!id || !ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid ad id" });
+        }
         const updateData = req.body;
         const result = await adsDataCollection.updateOne(
           { _id: new ObjectId(id) },
@@ -310,23 +353,36 @@ async function run() {
         );
         res.send({ success: true, result });
       } catch (err) {
+        console.error("Error updating ad:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
+    // delete ad
     app.delete("/ads/:id", async (req, res) => {
       try {
         const id = req.params.id;
+        if (!id || !ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid ad id" });
+        }
         const result = await adsDataCollection.deleteOne({
           _id: new ObjectId(id),
         });
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Ad not found" });
+        }
         res.send({ success: true, result });
       } catch (err) {
+        console.error("Error deleting ad:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
-    // ✅ Save or skip duplicate user
+    // users (create or return existing)
     app.post("/users", async (req, res) => {
       try {
         const { name, email } = req.body;
@@ -348,14 +404,20 @@ async function run() {
         const result = await userDataCollection.insertOne(newUser);
         res.send({ message: "User added successfully", result });
       } catch (error) {
-        console.error(error);
+        console.error("Error /users:", error);
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
 
+    // update game
     app.put("/games/:id", async (req, res) => {
       try {
         const id = req.params.id;
+        if (!id || !ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid game id" });
+        }
         const updateDoc = req.body;
         const result = await gameDataCollection.updateOne(
           { _id: new ObjectId(id) },
@@ -363,44 +425,72 @@ async function run() {
         );
         res.send({ success: true, result });
       } catch (err) {
+        console.error("Error updating game:", err);
         res.status(500).send({ success: false, message: err.message });
       }
     });
 
+    // delete game
     app.delete("/games/:id", async (req, res) => {
       try {
         const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Invalid game id" });
+        }
         const filter = { _id: new ObjectId(id) };
 
-        const deleteGame = await gameDataCollection.deleteOne(filter);
+        const deleteResult = await gameDataCollection.deleteOne(filter);
 
-        if (!deleteGame) {
+        if (deleteResult.deletedCount === 0) {
           return res
-            .send(404)
+            .status(404)
             .json({ success: false, message: "Game not found" });
         }
 
         res
-          .send(200)
+          .status(200)
           .json({ success: true, message: "Game deleted successfully" });
       } catch (error) {
         console.error("Error deleting game:", error);
-        res.send(500).json({ success: false, message: "Server error" });
+        res.status(500).json({ success: false, message: "Server error" });
       }
     });
 
-    // === Upload API ===
+    // Upload API
     app.post("/upload", upload.array("images"), async (req, res) => {
       try {
+        if (!req.files || req.files.length === 0) {
+          return res
+            .status(400)
+            .json({ success: false, message: "No files uploaded" });
+        }
+
         const urls = [];
 
         for (const file of req.files) {
-          const result = await cloudinary.uploader.upload(file.path, {
-            folder: "pooki-uploads",
-          });
+          try {
+            const result = await cloudinary.uploader.upload(file.path, {
+              folder: "pooki-uploads",
+            });
 
-          urls.push(result.secure_url);
-          fs.unlinkSync(file.path); // delete local temp file
+            urls.push(result.secure_url);
+          } catch (uploadErr) {
+            console.error(
+              "Cloudinary upload error for file:",
+              file.path,
+              uploadErr
+            );
+            // continue with other files instead of failing everything
+          } finally {
+            // try to delete local file if exists
+            try {
+              if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            } catch (e) {
+              console.error("Error deleting temp file:", file.path, e);
+            }
+          }
         }
 
         res.status(200).json({
@@ -417,74 +507,96 @@ async function run() {
         });
       }
     });
-  } finally {
-  }
-}
-run().catch(console.dir);
 
-// Basic route
-app.get("/", (req, res) => {
-  res.send("Hello, Express Server is running!");
-});
+    // sitemap route (reads DB)
+    app.get("/sitemap.xml", async (req, res) => {
+      try {
+        const games = await gameDataCollection
+          .find(
+            {},
+            { projection: { _id: 1, title: 1, category: 1, createdAt: 1 } }
+          )
+          .toArray();
 
-app.get("/sitemap.xml", async (req, res) => {
-  try {
-    const db = client.db("gameCollection"); // your DB name
-    const gameDataCollection = db.collection("gameData");
+        const categories = await gameDataCollection.distinct("category");
+        const baseUrl = process.env.SITE_BASE_URL || "https://innliv.com";
 
-    const games = await gameDataCollection
-      .find({}, { projection: { _id: 1, title: 1, category: 1, createdAt: 1 } })
-      .toArray();
-
-    const categories = await gameDataCollection.distinct("category");
-    const baseUrl = "https://innliv.com";
-
-    // Static pages
-    const staticUrls = `
-      <url><loc>${baseUrl}/</loc></url>
-      <url><loc>${baseUrl}/about</loc></url>
-      <url><loc>${baseUrl}/contact</loc></url>
-      <url><loc>${baseUrl}/privacy</loc></url>
+        // Static URLs with priority
+        const staticUrls = `
+      <url>
+        <loc>${baseUrl}/</loc>
+        <priority>1.0</priority>
+      </url>
+      <url>
+        <loc>${baseUrl}/about</loc>
+        <priority>0.8</priority>
+      </url>
+      <url>
+        <loc>${baseUrl}/contact</loc>
+        <priority>0.7</priority>
+      </url>
+      <url>
+        <loc>${baseUrl}/privacy</loc>
+        <priority>0.6</priority>
+      </url>
     `;
 
-    // Dynamic category URLs
-    let categoryUrls = "";
-    categories.forEach((category) => {
-      categoryUrls += `
+        // Dynamic category URLs
+        let categoryUrls = "";
+        categories.forEach((category) => {
+          categoryUrls += `
         <url>
           <loc>${baseUrl}/category/${encodeURIComponent(category)}</loc>
+          <priority>0.7</priority>
         </url>`;
-    });
+        });
 
-    // Dynamic game URLs
-    let gameUrls = "";
-    games.forEach((game) => {
-      const lastmod = game.createdAt
-        ? new Date(game.createdAt).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0];
-      gameUrls += `
+        // Dynamic game URLs
+        let gameUrls = "";
+        games.forEach((game) => {
+          const lastmod = game.createdAt
+            ? new Date(game.createdAt).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0];
+          gameUrls += `
         <url>
           <loc>${baseUrl}/games/${game._id}</loc>
           <lastmod>${lastmod}</lastmod>
+          <priority>0.5</priority>
         </url>`;
-    });
+        });
 
-    // Combine everything
-    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+        // Final sitemap XML
+        const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
       <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
         ${staticUrls}
         ${categoryUrls}
         ${gameUrls}
       </urlset>`;
 
-    res.header("Content-Type", "application/xml");
-    res.send(sitemap);
-  } catch (error) {
-    console.error("Error generating sitemap:", error);
-    res.status(500).send("Error generating sitemap");
-  }
-});
+        res.header("Content-Type", "application/xml");
+        res.send(sitemap);
+      } catch (error) {
+        console.error("Error generating sitemap:", error);
+        res.status(500).send("Error generating sitemap");
+      }
+    });
 
-app.listen(port, () => {
-  console.log(`🚀 Server is running on http://localhost:${port}`);
+    // Basic route
+    app.get("/", (req, res) => {
+      res.send("Hello, Express Server is running!");
+    });
+
+    // start server AFTER routes are registered
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
+}
+
+run().catch((e) => {
+  console.error("Unhandled error in run():", e);
+  process.exit(1);
 });
