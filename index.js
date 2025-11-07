@@ -88,15 +88,8 @@ async function run() {
     // search games (by title, optional)
     app.get("/search/games", async (req, res) => {
       try {
-        const { title } = req.query;
-
-        const query =
-          title && title.trim() !== ""
-            ? { title: { $regex: title, $options: "i" } }
-            : {};
-
         const games = await gameDataCollection
-          .find(query)
+          .find()
           .sort({ _id: -1 })
           .toArray();
         res.status(200).send(games);
