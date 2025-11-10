@@ -115,9 +115,9 @@ async function run() {
     });
 
     // get game by id
-    app.get("/games/:id", async (req, res) => {
+    app.post("/games/:slug", async (req, res) => {
       try {
-        const id = req?.params?.id;
+        const { id } = req?.body;
         if (!id || !ObjectId.isValid(id)) {
           return res.status(400).json({ message: "Invalid game id" });
         }
@@ -552,7 +552,10 @@ async function run() {
             : new Date().toISOString().split("T")[0];
           gameUrls += `
         <url>
-          <loc>${baseUrl}/games/${game._id}</loc>
+          <loc>${baseUrl}/games/${game.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")}/${game._id}</loc>
           <lastmod>${lastmod}</lastmod>
           <priority>0.5</priority>
         </url>`;
