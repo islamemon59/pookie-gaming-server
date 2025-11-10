@@ -555,7 +555,7 @@ async function run() {
           <loc>${baseUrl}/games/${game.title
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "")}/${game._id}</loc>
+            .replace(/^-+|-+$/g, "")}</loc>
           <lastmod>${lastmod}</lastmod>
           <priority>0.5</priority>
         </url>`;
