@@ -114,16 +114,31 @@ async function run() {
       }
     });
 
-    // get game by id
-    app.post("/games/:slug", async (req, res) => {
+    // Get game by title (slug)
+    app.get("/games/:slug", async (req, res) => {
       try {
-        const { id } = req?.body;
-        if (!id || !ObjectId.isValid(id)) {
-          return res.status(400).json({ message: "Invalid game id" });
+        const { slug } = req.params;
+
+        if (!slug) {
+          return res.status(400).json({ message: "Slug is required" });
         }
-        const query = { _id: new ObjectId(id) };
-        const game = await gameDataCollection.findOne(query);
+
+        // Convert slug from URL → Normal title
+        // "checkers-game" → "Checkers Game"
+        const normalTitle = slug
+          .split("-") // split by dash
+          .map(
+            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ) // capitalize
+          .join(" "); // join words with space
+
+        // Search MongoDB normally by title (case-sensitive or insensitive)
+        const game = await gameDataCollection.findOne({
+          title: { $regex: new RegExp(`^${normalTitle}$`, "i") }, // case-insensitive
+        });
+
         if (!game) return res.status(404).json({ message: "Game not found" });
+
         res.send(game);
       } catch (error) {
         console.error("Error fetching game:", error);
@@ -505,71 +520,73 @@ async function run() {
     app.get("/sitemap.xml", async (req, res) => {
       try {
         const games = await gameDataCollection
-          .find(
-            {},
-            { projection: { _id: 1, title: 1, category: 1, createdAt: 1 } }
-          )
+          .find({}, { projection: { title: 1, category: 1, createdAt: 1 } })
           .toArray();
 
         const categories = await gameDataCollection.distinct("category");
         const baseUrl = process.env.SITE_BASE_URL || "https://innliv.com";
 
-        // Static URLs with priority
-        const staticUrls = `
-      <url>
-        <loc>${baseUrl}/</loc>
-        <priority>1.0</priority>
-      </url>
-      <url>
-        <loc>${baseUrl}/about</loc>
-        <priority>0.8</priority>
-      </url>
-      <url>
-        <loc>${baseUrl}/contact</loc>
-        <priority>0.7</priority>
-      </url>
-      <url>
-        <loc>${baseUrl}/privacy</loc>
-        <priority>0.6</priority>
-      </url>
-    `;
+        // ---------- STATIC PAGES ----------
+        const staticPages = [
+          { url: `${baseUrl}/`, priority: "1.0" },
+          { url: `${baseUrl}/about-us`, priority: "0.8" },
+          { url: `${baseUrl}/contact-us`, priority: "0.7" },
+          { url: `${baseUrl}/privacy-policy`, priority: "0.6" },
+          { url: `${baseUrl}/terms-and-condition`, priority: "0.5" },
+        ];
 
-        // Dynamic category URLs
-        let categoryUrls = "";
-        categories.forEach((category) => {
-          categoryUrls += `
-        <url>
-          <loc>${baseUrl}/category/${encodeURIComponent(category)}</loc>
-          <priority>0.7</priority>
-        </url>`;
-        });
+        const staticUrls = staticPages
+          .map(
+            (p) => `
+  <url>
+    <loc><![CDATA[${p.url}]]></loc>
+    <priority>${p.priority}</priority>
+  </url>`
+          )
+          .join("");
 
-        // Dynamic game URLs
-        let gameUrls = "";
-        games.forEach((game) => {
-          const lastmod = game.createdAt
-            ? new Date(game.createdAt).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0];
-          gameUrls += `
-        <url>
-          <loc>${baseUrl}/games/${game.title
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "")}</loc>
-          <lastmod>${lastmod}</lastmod>
-          <priority>0.5</priority>
-        </url>`;
-        });
+        // ---------- CATEGORY URLs ----------
+        const categoryUrls = categories
+          .map(
+            (category) => `
+  <url>
+    <loc><![CDATA[${baseUrl}/category/${encodeURIComponent(category)}]]></loc>
+    <priority>0.7</priority>
+  </url>`
+          )
+          .join("");
 
-        // Final sitemap XML
+        // ---------- GAME URLs ----------
+        const gameUrls = games
+          .map((game) => {
+            const slug = game.title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "");
+
+            const lastmod = game.createdAt
+              ? new Date(game.createdAt).toISOString()
+              : new Date().toISOString();
+
+            return `
+  <url>
+    <loc><![CDATA[${baseUrl}/games/${slug}]]></loc>
+    <lastmod>${lastmod}</lastmod>
+    <priority>0.5</priority>
+  </url>`;
+          })
+          .join("");
+
+        // ---------- FINAL SITEMAP ----------
         const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-        ${staticUrls}
-        ${categoryUrls}
-        ${gameUrls}
-      </urlset>`;
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticUrls}
+${categoryUrls}
+${gameUrls}
+</urlset>`;
 
-        res.header("Content-Type", "application/xml");
+        res.set("Content-Type", "application/xml; charset=utf-8");
+        res.set("Cache-Control", "public, max-age=3600");
         res.send(sitemap);
       } catch (error) {
         console.error("Error generating sitemap:", error);
